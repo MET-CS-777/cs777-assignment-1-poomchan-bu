@@ -48,23 +48,55 @@ if __name__ == "__main__":
 
     #Task 1
     #Your code goes here
+    sqlContext = SQLContext(sc)
+    file = sys.argv[1]
+    df = sqlContext.read.format('csv').options(header='false', inferSchema='true',  sep =",").load(file)
+    rdd = df.rdd.map(tuple)
 
-    results_1.coalesce(1).saveAsTextFile(sys.argv[2])
+    # Clean data
+    clean_rdd = rdd.filter(correctRows)
+    
+    # Select only necessary information (taxi-driver pairs)
+    taxi_driver = clean_rdd.map(lambda x: (x[0], x[1]))
+    
+    # Filter only distinct taxi-drivers pairs
+    distinct_taxi_driver = taxi_driver.distinct()
+
+    # Count the number of pairs
+    count_by_key = distinct_taxi_driver.map(lambda x: (x[0], 1)).reduceByKey(lambda a, b: a + b)
+
+    # Collect top result (sort by value)
+    result1 = count_by_key.top(10, key=lambda x: x[1])
+    
+    rdd_result1 = sc.parallelize(result1)
+    rdd_result1.coalesce(1).saveAsTextFile(sys.argv[2])
 
 
     #Task 2
-    #Your code goes here
+    # Your code goes here
+    
+    # Select only necessary information (driver, time, money)
+    task2_data = clean_rdd.map(lambda x: (x[0], x[4], x[16]))
+    
+    # Calculate money earned per minute
+    def calculate_money_per_minute(x):
+        time = x[1]/60 # minutes
+        money = x[2]
+        return (x[0], money/time)
+    
+    task2_calculated = task2_data.map(calculate_money_per_minute)
 
+    # Collect top result (sort by value)
+    result2 = task2_calculated.top(10, key=lambda x: x[1])
 
     #savings output to argument
-    results_2.coalesce(1).saveAsTextFile(sys.argv[3])
-
+    rdd_result2 = sc.parallelize(result2)
+    rdd_result2.coalesce(1).saveAsTextFile(sys.argv[3])
 
     #Task 3 - Optional 
     #Your code goes here
 
     #Task 4 - Optional 
     #Your code goes here
-
 
     sc.stop()
